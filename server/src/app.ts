@@ -18,6 +18,7 @@ import { usuariosRouter } from './routes/usuarios.ts';
 export const app = express();
 
 app.disable('x-powered-by');
+if (config.confiarEnProxy) app.set('trust proxy', 1);
 app.use(helmet());
 app.use(express.json({ limit: '100kb' }));
 app.use(cookieParser());

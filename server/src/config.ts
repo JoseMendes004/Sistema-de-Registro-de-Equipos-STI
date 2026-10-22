@@ -17,11 +17,16 @@ function requerida(nombre: string): string {
 
 export const config = {
   root,
-  port: Number(process.env.API_PORT ?? 4000),
+  // En Render (o con NODE_ENV=production) el servicio debe escuchar en el puerto que asigna la plataforma (PORT).
+  port: Number(process.env.API_PORT ?? (process.env.RENDER || process.env.NODE_ENV === 'production' ? process.env.PORT : undefined) ?? 4000),
   databaseUrl: requerida('DATABASE_URL'),
   jwtSecret: requerida('JWT_SECRET'),
   zonaHoraria: process.env.ZONA_HORARIA ?? 'America/Caracas',
   registroAbierto: process.env.REGISTRO_ABIERTO !== 'false',
   cookieSecure: process.env.COOKIE_SECURE === 'true',
   isProd: process.env.NODE_ENV === 'production',
+  // Detrás del proxy de Render hay que confiar en X-Forwarded-For (IP real para el límite de intentos de login).
+  confiarEnProxy: Boolean(process.env.RENDER) || process.env.NODE_ENV === 'production',
+  // DB_SSL=true: conexión cifrada a la base (necesaria al conectarse desde fuera de Render).
+  dbSsl: process.env.DB_SSL === 'true',
 };

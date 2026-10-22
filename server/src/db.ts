@@ -4,6 +4,7 @@ import { config } from './config.ts';
 export const pool = new pg.Pool({
   connectionString: config.databaseUrl,
   options: `-c timezone=${config.zonaHoraria}`,
+  ssl: config.dbSsl ? { rejectUnauthorized: false } : undefined,
 });
 
 export type Cliente = pg.PoolClient;

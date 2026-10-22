@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch src/index.ts",
-    "start": "node src/index.ts",
+    "start": "node scripts/migrate.ts && node scripts/bootstrap-admin.ts && node src/index.ts",
+    "dev:api": "node src/index.ts",
     "migrate": "node scripts/migrate.ts",
     "seed": "node scripts/seed.ts",
     "create-admin": "node scripts/create-admin.ts",
