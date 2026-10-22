@@ -1,0 +1,27 @@
+{
+  "name": "sti-registro-equipos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sistema de Registro de Equipos — STI",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "db:up": "docker compose up -d --wait",
+    "db:down": "docker compose down",
+    "migrate": "npm run migrate -w server",
+    "seed": "npm run seed -w server",
+    "create-admin": "npm run create-admin -w server",
+    "dev": "concurrently -n api,web -c red,white \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w client",
+    "start": "npm run start -w server",
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w client",
+    "backup": "node scripts/backup.mjs",
+    "restore": "node scripts/restore.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
+}
