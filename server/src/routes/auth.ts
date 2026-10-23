@@ -55,6 +55,10 @@ authRouter.post('/registro', limiteIntentos, async (req, res) => {
   if (existe.rowCount) {
     throw new HttpError(409, 'Revisa los campos marcados.', { indicador: 'Ese indicador ya está registrado.' });
   }
+  const estacionUsada = await pool.query('SELECT 1 FROM usuarios WHERE lower(estacion) = lower($1) AND eliminado_en IS NULL', [d.estacion]);
+  if (estacionUsada.rowCount) {
+    throw new HttpError(409, 'Revisa los campos marcados.', { estacion: 'Esa estación ya está asignada a otro usuario.' });
+  }
   const hash = await bcrypt.hash(d.clave, 12);
   await pool.query(
     `INSERT INTO usuarios (nombre, apellido, indicador, estacion, clave_hash) VALUES ($1, $2, $3, $4, $5)`,

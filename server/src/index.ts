@@ -6,7 +6,7 @@ try {
   await pool.query('SELECT 1 FROM usuarios LIMIT 1');
 } catch (e) {
   console.error('No se pudo usar la base de datos:', (e as Error).message);
-  console.error('Comprueba que el contenedor esté en marcha (npm run db:up) y las migraciones aplicadas (npm run migrate).');
+  console.error('Comprueba que PostgreSQL esté en marcha, que DATABASE_URL del archivo .env sea correcta y que las migraciones estén aplicadas (npm run migrate).');
   process.exit(1);
 }
 

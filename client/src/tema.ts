@@ -69,21 +69,19 @@ export function fijarTema(t: Tema) {
 
 let temporizador: ReturnType<typeof setTimeout> | undefined;
 
-/** Aplica la paleta al instante y la guarda en el servidor (solo el administrador puede). */
+/** Aplica la paleta al instante y la guarda en el servidor, en la cuenta de quien la cambia. */
 export function guardarTema(t: Tema) {
   fijarTema(t);
   clearTimeout(temporizador);
   temporizador = setTimeout(() => {
-    api('/tema', { method: 'PUT', body: t }).catch(() => {});
+    api('/tema/mio', { method: 'PUT', body: t }).catch(() => {});
   }, 500);
 }
 
-/** Pide al servidor la paleta vigente (es pública) y la aplica. */
+/** Pide al servidor la paleta de la persona con sesión iniciada y la aplica. */
 export async function cargarTemaServidor() {
   try {
-    const res = await fetch('/api/tema', { cache: 'no-store' });
-    if (!res.ok) return;
-    const { tema } = await res.json();
+    const { tema } = await api<{ tema: Tema }>('/tema/mio');
     if (tema && Number.isFinite(tema.h) && /^#[0-9a-fA-F]{6}$/.test(tema.fondo)) {
       fijarTema({ h: tema.h, s: Number.isFinite(tema.s) ? tema.s : 1, fondo: tema.fondo });
     }

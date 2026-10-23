@@ -600,6 +600,10 @@ input[readonly] {
   color: var(--texto-suave);
   background: var(--superficie-2);
 }
+input.nombre-generado {
+  color: var(--texto);
+  background: var(--negro);
+}
 .campo.con-error input,
 .campo.con-error select,
 .campo.con-error textarea,
@@ -2066,4 +2070,16 @@ dd {
 .logo-electrico {
   display: block;
   overflow: visible;
+}
+
+/* ===== Salida del equipo y cierre del caso ===== */
+.acciones-salida {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.panel-salida-caso .aviso {
+  margin-bottom: 12px;
 }

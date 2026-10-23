@@ -9,8 +9,6 @@
   ],
   "scripts": {
     "setup": "node scripts/setup.mjs",
-    "db:up": "docker compose up -d --wait",
-    "db:down": "docker compose down",
     "migrate": "npm run migrate -w server",
     "seed": "npm run seed -w server",
     "create-admin": "npm run create-admin -w server",

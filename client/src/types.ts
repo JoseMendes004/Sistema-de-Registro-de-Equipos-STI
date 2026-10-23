@@ -11,6 +11,9 @@ export type Estado = (typeof ESTADOS)[number];
 
 export type TipoDisco = 'HDD' | 'SSD' | 'OTRO' | 'NO_ESPECIFICADO';
 
+export type TipoEquipo = 'PORTATIL' | 'ESCRITORIO';
+export type SistemaOperativo = 'WINDOWS_10' | 'WINDOWS_11' | 'LINUX';
+
 export interface Usuario {
   id: number;
   nombre: string;
@@ -30,6 +33,8 @@ export interface Equipo {
   modelo: string;
   mac: string;
   nombre_equipo: string;
+  tipo_equipo: TipoEquipo | null;
+  sistema_operativo: SistemaOperativo | null;
   analista_id: number;
   analista: string;
   analista_indicador: string;
@@ -38,6 +43,7 @@ export interface Equipo {
   capacidad_disco: string;
   ram: string;
   estado: Estado;
+  cerrado_en: string | null;
   observaciones: string;
   fecha_salida: string | null;
   retirado_por: string | null;

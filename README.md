@@ -8,12 +8,17 @@ Sistema de control de ingreso, mantenimiento y entrega de equipos informáticos 
 |---|---|
 | Frontend | React 19 + Vite + TypeScript (`client/`) |
 | Backend | Node.js 24 + Express 5 (`server/`), validación con zod, sesión JWT en cookie `httpOnly`, claves con bcrypt |
-| Base de datos | PostgreSQL 16 en Docker (volumen persistente `sti_pgdata`) |
+| Base de datos | PostgreSQL 16 o superior, instalado en el equipo |
 
 ## Requisitos (Windows)
 
 1. **Node.js 24 o superior** — <https://nodejs.org> (el servidor ejecuta TypeScript directamente, por eso hace falta esta versión).
-2. **Docker Desktop** — <https://www.docker.com/products/docker-desktop>. Debe estar **abierto** antes de usar la base de datos.
+2. **PostgreSQL** — <https://www.postgresql.org/download/windows/>. Instala *PostgreSQL Server* y *Command Line Tools*, deja el puerto 5432 y anota la clave del usuario `postgres`. Después crea la base (en «SQL Shell (psql)» o en pgAdmin):
+
+   ```sql
+   CREATE USER sti WITH PASSWORD 'una_clave_segura';
+   CREATE DATABASE sti OWNER sti;
+   ```
 
 ## Instalación y primera ejecución
 
@@ -27,13 +32,7 @@ npm install
 npm run setup
 ```
 
-Crea el archivo `.env` con una clave de base de datos y un secreto de sesión aleatorios.
-
-```bash
-npm run db:up
-```
-
-Descarga y arranca PostgreSQL (puerto local 5433).
+Pide la clave del usuario `sti` de PostgreSQL y crea el archivo `.env` con ella y un secreto de sesión aleatorio.
 
 ```bash
 npm run migrate
@@ -61,9 +60,8 @@ Abre <http://localhost:5173> e inicia sesión.
 
 ## Uso diario
 
-1. Abrir Docker Desktop.
-2. `npm run db:up` (si el contenedor no está ya en marcha; se reinicia solo con Docker).
-3. `npm run dev`.
+1. Encender PostgreSQL (servicio `postgresql-x64-18`, con `Start-Service` en PowerShell como administrador; `Stop-Service` para apagarlo).
+2. `npm run dev` (o `npm start` si ya hiciste `npm run build`).
 
 Flujo: iniciar sesión → **Registrar Equipo** → marcar actividades en el detalle → actualizar el estado → **Registrar salida** (pide confirmación y deja el equipo como «Entregado»).
 
@@ -99,8 +97,6 @@ Para automatizarlo, crea en el *Programador de tareas* de Windows una tarea diar
 ## Estructura
 
 ```
-├─ docker-compose.yml        PostgreSQL
-├─ .env.example              Variables de entorno (plantilla)
 ├─ scripts/                  setup, backup, restore
 ├─ server/
 │  ├─ migrations/            001_init.sql (esquema), 002_seed_actividades.sql
@@ -130,8 +126,8 @@ Para automatizarlo, crea en el *Programador de tareas* de Windows una tarea diar
 
 ## Montarlo en un servidor
 
-1. Instalar Node 24 y Docker en el servidor; copiar el proyecto (sin `node_modules`).
-2. `npm install`, `npm run setup`, `npm run db:up`, `npm run migrate`, `npm run create-admin`.
+1. Instalar Node 24 y PostgreSQL en el servidor, crear la base `sti` (ver Requisitos); copiar el proyecto (sin `node_modules`).
+2. `npm install`, `npm run setup`, `npm run migrate`, `npm run create-admin`.
 3. `npm run build` — compila el frontend en `client/dist`.
 4. Arrancar con `NODE_ENV=production` y `npm start`: el mismo proceso sirve la API y el frontend en el puerto `API_PORT` (4000).
 5. Ponerlo detrás de HTTPS (IIS, Nginx o Caddy como proxy inverso) y entonces definir `COOKIE_SECURE=true` en `.env`.

@@ -1,7 +1,9 @@
 // Genera el archivo .env con secretos aleatorios (no sobrescribe uno existente).
+// Usa la base `sti` del PostgreSQL instalado en este equipo (usuario `sti`, puerto 5432).
 import { randomBytes } from 'node:crypto';
 import { existsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -12,17 +14,18 @@ if (existsSync(envPath)) {
   process.exit(0);
 }
 
-const dbPass = randomBytes(18).toString('hex');
-const jwt = randomBytes(48).toString('hex');
+const rl = createInterface({ input: process.stdin, output: process.stdout });
+const clave = (await rl.question('Clave del usuario «sti» de PostgreSQL: ')).trim();
+rl.close();
+if (!clave) {
+  console.error('Hace falta la clave para armar DATABASE_URL.');
+  process.exit(1);
+}
 
+const jwt = randomBytes(48).toString('hex');
 writeFileSync(
   envPath,
-  `POSTGRES_USER=sti
-POSTGRES_PASSWORD=${dbPass}
-POSTGRES_DB=sti
-POSTGRES_PORT=5433
-
-DATABASE_URL=postgres://sti:${dbPass}@localhost:5433/sti
+  `DATABASE_URL=postgres://sti:${encodeURIComponent(clave)}@localhost:5432/sti
 JWT_SECRET=${jwt}
 API_PORT=4000
 ZONA_HORARIA=America/Caracas

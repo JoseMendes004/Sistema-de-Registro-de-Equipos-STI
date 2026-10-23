@@ -337,6 +337,8 @@ importarRouter.post('/confirmar', crudo, async (req, res) => {
           `INSERT INTO salidas (equipo_id, fecha_salida, retirado_por, observaciones, analista_id) VALUES ($1, $2, $3, '', $4)`,
           [id, d!.fecha_salida, d!.retirado_por, d!.analista_id],
         );
+        // Un equipo importado como «Entregado» llega con el caso ya cerrado.
+        await c.query('UPDATE equipos SET cerrado_en = $2 WHERE id = $1', [id, d!.fecha_salida]);
         await registrarHistorial(c, id, admin.id, 'SALIDA', `Equipo entregado a ${d!.retirado_por}`, { importado: true }, d!.fecha_salida);
       }
     }

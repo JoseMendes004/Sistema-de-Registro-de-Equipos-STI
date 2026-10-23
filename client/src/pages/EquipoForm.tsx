@@ -5,15 +5,16 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, camposError, mensajeError } from '../api';
 import { useUsuario } from '../auth';
 import { Aviso, Cabecera, Campo } from '../components';
-import type { DetalleEquipo, Equipo, TipoDisco } from '../types';
-import { CAPACIDADES, DISCOS, MEMORIAS, numeroRegistro } from '../util';
+import type { DetalleEquipo, Equipo, SistemaOperativo, TipoDisco, TipoEquipo } from '../types';
+import { CAPACIDADES, DISCOS, MEMORIAS, SISTEMAS, TIPOS_EQUIPO, nombreEquipo, numeroRegistro } from '../util';
 
 interface Formulario {
   usuario_propietario: string;
   etiqueta: string;
   modelo: string;
   mac: string;
-  nombre_equipo: string;
+  tipo_equipo: TipoEquipo | '';
+  sistema_operativo: SistemaOperativo | '';
   tipo_disco: TipoDisco;
   capacidad_disco: string;
   ram: string;
@@ -25,7 +26,8 @@ const VACIO: Formulario = {
   etiqueta: '',
   modelo: '',
   mac: '',
-  nombre_equipo: '',
+  tipo_equipo: '',
+  sistema_operativo: '',
   tipo_disco: 'NO_ESPECIFICADO',
   capacidad_disco: '',
   ram: '',
@@ -33,6 +35,9 @@ const VACIO: Formulario = {
 };
 
 const MAC_RE = /^[0-9A-Fa-f]{2}([-:.]?[0-9A-Fa-f]{2}){5}$/;
+
+/** Nombre del equipo según lo elegido; vacío mientras falte el tipo, el sistema o una MAC válida. */
+const nombreGenerado = (f: Formulario) => (MAC_RE.test(f.mac.trim()) ? nombreEquipo(f.sistema_operativo, f.tipo_equipo, f.mac) : '');
 
 /** Botones de opción con una entrada libre cuando se elige "Otra capacidad". */
 function OpcionesConOtra({
@@ -111,7 +116,8 @@ function FormularioEquipo({ inicial, equipo }: { inicial: Formulario; equipo?: E
     if (!f.modelo.trim()) c.modelo = 'El modelo es obligatorio.';
     if (!f.mac.trim()) c.mac = 'La dirección MAC es obligatoria.';
     else if (!MAC_RE.test(f.mac.trim())) c.mac = 'MAC inválida. Formato esperado: 00-34-7E-0F-E8-38.';
-    if (!f.nombre_equipo.trim()) c.nombre_equipo = 'El nombre del equipo es obligatorio.';
+    if (!f.tipo_equipo) c.tipo_equipo = 'Elige el tipo de equipo.';
+    if (!f.sistema_operativo) c.sistema_operativo = 'Elige el sistema operativo.';
     setCampos(c);
     setError('');
     if (Object.keys(c).length) {
@@ -122,7 +128,7 @@ function FormularioEquipo({ inicial, equipo }: { inicial: Formulario; equipo?: E
     try {
       const r = await api<{ equipo: Equipo }>(equipo ? `/equipos/${equipo.id}` : '/equipos', {
         method: equipo ? 'PUT' : 'POST',
-        body: f,
+        body: { ...f, nombre_equipo: undefined },
       });
       navigate(`/equipos/${r.equipo.id}`, { state: { aviso: equipo ? 'Cambios guardados.' : 'Equipo registrado. Ya puedes marcar las actividades.' } });
     } catch (err) {
@@ -132,7 +138,7 @@ function FormularioEquipo({ inicial, equipo }: { inicial: Formulario; equipo?: E
     }
   }
 
-  const texto = (k: 'usuario_propietario' | 'etiqueta' | 'modelo' | 'mac' | 'nombre_equipo', etiqueta: string, ayuda?: string, placeholder?: string) => (
+  const texto = (k: 'usuario_propietario' | 'etiqueta' | 'modelo' | 'mac', etiqueta: string, ayuda?: string, placeholder?: string) => (
     <Campo etiqueta={etiqueta} error={campos[k]} ayuda={ayuda}>
       <input value={f[k]} onChange={(e) => cambiar(k, e.target.value)} placeholder={placeholder} maxLength={120} />
     </Campo>
@@ -151,7 +157,29 @@ function FormularioEquipo({ inicial, equipo }: { inicial: Formulario; equipo?: E
           {texto('etiqueta', 'Etiqueta', 'Código de identificación del equipo.')}
           {texto('modelo', 'Modelo del equipo', undefined, 'Ej.: Lenovo 8910')}
           {texto('mac', 'Dirección MAC', undefined, '00-34-7E-0F-E8-38')}
-          {texto('nombre_equipo', 'Nombre del equipo', undefined, 'Ej.: DEPAREF0FE838')}
+          <Campo etiqueta="Tipo de equipo" error={campos.tipo_equipo}>
+            <select value={f.tipo_equipo} onChange={(e) => cambiar('tipo_equipo', e.target.value as TipoEquipo | '')}>
+              <option value="">Seleccionar…</option>
+              {TIPOS_EQUIPO.map((t) => (
+                <option key={t.valor} value={t.valor}>
+                  {t.nombre}
+                </option>
+              ))}
+            </select>
+          </Campo>
+          <Campo etiqueta="Sistema operativo" error={campos.sistema_operativo}>
+            <select value={f.sistema_operativo} onChange={(e) => cambiar('sistema_operativo', e.target.value as SistemaOperativo | '')}>
+              <option value="">Seleccionar…</option>
+              {SISTEMAS.map((o) => (
+                <option key={o.valor} value={o.valor}>
+                  {o.nombre}
+                </option>
+              ))}
+            </select>
+          </Campo>
+          <Campo etiqueta="Nombre del equipo" ayuda="Sistema operativo + tipo + últimos 6 dígitos de la MAC.">
+            <input className="nombre-generado" value={nombreGenerado(f)} placeholder="Se genera automáticamente" readOnly tabIndex={-1} />
+          </Campo>
         </div>
       </section>
 
@@ -305,7 +333,8 @@ export function EquipoEditar() {
             etiqueta: e.etiqueta,
             modelo: e.modelo,
             mac: e.mac,
-            nombre_equipo: e.nombre_equipo,
+            tipo_equipo: e.tipo_equipo ?? '',
+            sistema_operativo: e.sistema_operativo ?? '',
             tipo_disco: e.tipo_disco,
             capacidad_disco: e.capacidad_disco,
             ram: e.ram,

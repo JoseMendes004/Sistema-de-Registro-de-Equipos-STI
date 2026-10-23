@@ -1,6 +1,6 @@
-import { ArrowDownUp, ClipboardList, Eye, LogOut, Pencil, Plus, RotateCcw, Search, Trash2 } from 'lucide-react';
+import { ArrowDownUp, CircleCheckBig, ClipboardList, Eye, Pencil, Plus, RotateCcw, Search, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, mensajeError, qs } from '../api';
 import { useUsuario } from '../auth';
 import { Aviso, Cabecera, Confirmar, Insignia, Paginacion, Progreso, Vacio } from '../components';
@@ -10,7 +10,9 @@ import { fechaHora, nombreDisco, numeroRegistro } from '../util';
 
 export function Equipos() {
   const usuario = useUsuario();
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
+  const [aCerrar, setACerrar] = useState<Equipo | null>(null);
   const [lista, setLista] = useState<ListaEquipos | null>(null);
   const [catalogos, setCatalogos] = useState<Catalogos>({ analistas: [], estaciones: [] });
   const [error, setError] = useState('');
@@ -54,7 +56,7 @@ export function Equipos() {
 
   useEffect(() => {
     let vigente = true;
-    api<ListaEquipos>(`/equipos${qs({ ...filtros, por_pagina: 10 })}`)
+    api<ListaEquipos>(`/equipos${qs({ ...filtros, cerrado: 'no', por_pagina: 10 })}`)
       .then((r) => {
         if (!vigente) return;
         setLista(r);
@@ -82,7 +84,24 @@ export function Equipos() {
     }
   }
 
-  const puedeOperar = (e: Equipo) => e.estado !== 'Entregado';
+  async function cerrar() {
+    if (!aCerrar) return;
+    setOcupado(true);
+    try {
+      await api(`/equipos/${aCerrar.id}/cerrar`, { method: 'POST' });
+      setRecarga((n) => n + 1);
+    } catch (e) {
+      setError(mensajeError(e));
+    } finally {
+      setACerrar(null);
+      setOcupado(false);
+    }
+  }
+
+  // Con el 100 % de las actividades: si ya tiene salida se cierra el caso; si no, se lleva a registrarla.
+  const alCerrar = (e: Equipo) => (e.fecha_salida ? setACerrar(e) : navigate(`/equipos/${e.id}?salida=1`));
+
+  const puedeOperar = (e: Equipo) => !e.cerrado_en;
   const hayFiltros = filtros.q || filtros.estado || filtros.desde || filtros.hasta || filtros.estacion;
 
   return (
@@ -231,9 +250,21 @@ export function Equipos() {
                           </Link>
                         )}
                         {puedeOperar(e) && (
-                          <Link to={`/equipos/${e.id}?salida=1`} className="btn-accion verde" title="Registrar salida" aria-label="Registrar salida">
-                            <LogOut size={15} />
-                          </Link>
+                          <button
+                            className="btn-accion verde"
+                            disabled={e.actividades_hechas < lista.total_actividades || lista.total_actividades === 0}
+                            title={
+                              e.actividades_hechas < lista.total_actividades
+                                ? `Para cerrar el caso faltan ${lista.total_actividades - e.actividades_hechas} actividad(es)`
+                                : e.fecha_salida
+                                  ? 'Cerrar caso'
+                                  : 'Registra la salida para poder cerrar el caso'
+                            }
+                            aria-label="Cerrar caso"
+                            onClick={() => alCerrar(e)}
+                          >
+                            <CircleCheckBig size={15} />
+                          </button>
                         )}
                         {usuario.rol === 'admin' && (
                           <button className="btn-accion rojo" title="Eliminar registro" aria-label="Eliminar" onClick={() => setAEliminar(e)}>
@@ -252,6 +283,22 @@ export function Equipos() {
           <Paginacion pagina={lista.pagina} porPagina={lista.por_pagina} total={lista.total} onCambiar={(p) => cambiar({ pagina: p })} />
         )}
       </section>
+
+      {aCerrar && (
+        <Confirmar
+          titulo="Cerrar caso"
+          mensaje={
+            <>
+              Se cerrará el caso <strong>{numeroRegistro(aCerrar.numero_registro)}</strong> ({aCerrar.modelo}, {aCerrar.usuario_propietario}). El equipo saldrá de este
+              registro y aparecerá en Reportes.
+            </>
+          }
+          textoAccion="Cerrar caso"
+          ocupado={ocupado}
+          onConfirmar={cerrar}
+          onCancelar={() => setACerrar(null)}
+        />
+      )}
 
       {aEliminar && (
         <Confirmar

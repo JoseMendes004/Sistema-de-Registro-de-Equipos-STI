@@ -30,9 +30,9 @@ if (interactivo && !process.stdin.isTTY) {
 }
 
 const indicador = env.ADMIN_INDICADOR ?? (await preguntar('Indicador del administrador: '));
-const nombre = env.ADMIN_NOMBRE ?? (interactivo ? await preguntar('Nombre: ') : 'Administrador');
-const apellido = env.ADMIN_APELLIDO ?? (interactivo ? await preguntar('Apellido: ') : 'STI');
-const estacion = env.ADMIN_ESTACION ?? (interactivo ? await preguntar('Estación de trabajo: ') : '1');
+const nombre = env.ADMIN_NOMBRE ?? (interactivo ? await preguntar('Nombre (opcional): ') : 'Administrador');
+const apellido = env.ADMIN_APELLIDO ?? (interactivo ? await preguntar('Apellido (opcional): ') : 'STI');
+const estacion = env.ADMIN_ESTACION ?? (interactivo ? await preguntar('Estación de trabajo (opcional): ') : '1');
 const clave = env.ADMIN_CLAVE ?? (await preguntar('Clave (mínimo 8 caracteres, no se muestra): ', true));
 if (interactivo) {
   const repetir = await preguntar('Repite la clave: ', true);
@@ -43,8 +43,8 @@ if (interactivo) {
 }
 rl.close();
 
-if (!/^[A-Za-z0-9._-]{1,30}$/.test(indicador) || !nombre || !apellido || !estacion) {
-  console.error('Datos incompletos o indicador inválido (solo letras, números, punto y guiones).');
+if (!/^[A-Za-z0-9._-]{1,30}$/.test(indicador)) {
+  console.error('Indicador inválido (solo letras, números, punto y guiones).');
   process.exit(1);
 }
 if (clave.length < 8 || clave.length > 72) {

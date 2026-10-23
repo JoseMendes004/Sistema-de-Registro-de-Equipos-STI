@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from '../db.ts';
-import { requireAuth, requireRole } from '../middleware/auth.ts';
+import { requireAuth, usuarioDe } from '../middleware/auth.ts';
 import { validar } from '../middleware/validate.ts';
 
 const TEMA_POR_DEFECTO = { h: 355, s: 1, fondo: '#1f1c1c' };
@@ -20,35 +20,34 @@ async function leer<T>(clave: string, porDefecto: T): Promise<T> {
   return (rows[0]?.valor as T) ?? porDefecto;
 }
 
-async function escribir(clave: string, valor: unknown) {
-  await pool.query(
-    `INSERT INTO configuracion (clave, valor) VALUES ($1, $2)
-     ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor, actualizado_en = now()`,
-    [clave, JSON.stringify(valor)],
-  );
-}
-
 export const temaRouter = Router();
 
-// La paleta vigente es pública: también la necesita la pantalla de inicio de sesión.
+// La paleta del sistema es pública (la necesita la pantalla de inicio de sesión) y es la de quien aún no eligió una.
 temaRouter.get('/', async (_req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.json({ tema: await leer('tema', TEMA_POR_DEFECTO) });
 });
 
-// Solo el administrador puede cambiar la paleta del sistema y administrar sus paletas guardadas.
-temaRouter.put('/', requireAuth, requireRole('admin'), async (req, res) => {
+// Cada usuario tiene su propia paleta y sus paletas guardadas; sin elegir, ve la paleta del sistema.
+temaRouter.get('/mio', requireAuth, async (_req, res) => {
+  const { rows } = await pool.query('SELECT tema FROM usuarios WHERE id = $1', [usuarioDe(res).id]);
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ tema: rows[0]?.tema ?? (await leer('tema', TEMA_POR_DEFECTO)) });
+});
+
+temaRouter.put('/mio', requireAuth, async (req, res) => {
   const tema = validar(temaSchema, req.body);
-  await escribir('tema', tema);
+  await pool.query('UPDATE usuarios SET tema = $1 WHERE id = $2', [JSON.stringify(tema), usuarioDe(res).id]);
   res.json({ tema });
 });
 
-temaRouter.get('/paletas', requireAuth, requireRole('admin'), async (_req, res) => {
-  res.json({ paletas: await leer('paletas', []) });
+temaRouter.get('/paletas', requireAuth, async (_req, res) => {
+  const { rows } = await pool.query('SELECT paletas FROM usuarios WHERE id = $1', [usuarioDe(res).id]);
+  res.json({ paletas: rows[0]?.paletas ?? [] });
 });
 
-temaRouter.put('/paletas', requireAuth, requireRole('admin'), async (req, res) => {
+temaRouter.put('/paletas', requireAuth, async (req, res) => {
   const paletas = validar(paletasSchema, req.body?.paletas);
-  await escribir('paletas', paletas);
+  await pool.query('UPDATE usuarios SET paletas = $1 WHERE id = $2', [JSON.stringify(paletas), usuarioDe(res).id]);
   res.json({ paletas });
 });

@@ -7,13 +7,11 @@ import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { AuthProvider } from './auth';
 import './styles.css';
-import { aplicarTema, cargarTemaServidor, leerTema } from './tema';
+import { aplicarTema, leerTema } from './tema';
 
 // Aplica la paleta guardada antes de dibujar la página (evita un parpadeo de colores).
 aplicarTema(leerTema());
-// Después se pide la paleta vigente al servidor (y se vuelve a pedir al volver a esta pestaña).
-cargarTemaServidor();
-window.addEventListener('focus', cargarTemaServidor);
+// La paleta de cada persona se pide al servidor cuando inicia sesión (ver AuthProvider).
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

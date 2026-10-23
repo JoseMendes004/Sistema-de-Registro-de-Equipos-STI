@@ -2,12 +2,14 @@ import { Palette, Pencil, Save, Settings, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { mensajeError } from '../api';
+import { useUsuario } from '../auth';
 import { Aviso, Cabecera } from '../components';
 import { ImportarEquipos } from './Importar';
 import { ACENTOS, acentoDe, FONDOS, cargarPaletas, guardarPaletas, guardarTema, hexDeTono, leerTema, MAX_PALETAS } from '../tema';
 import type { Paleta, Tema } from '../tema';
 
 export function Configuracion() {
+  const esAdmin = useUsuario().rol === 'admin';
   const [tema, setTema] = useState<Tema>(leerTema);
   const [paletas, setPaletas] = useState<Paleta[]>([]);
   const [error, setError] = useState('');
@@ -81,7 +83,7 @@ export function Configuracion() {
 
   return (
     <>
-      <Cabecera icono={<Settings size={24} />} titulo="Ajustes" subtitulo="Opciones del administrador: colores de la página e importación de equipos desde Excel." />
+      <Cabecera icono={<Settings size={24} />} titulo="Ajustes" subtitulo={esAdmin ? 'Tu paleta de colores e importación de equipos desde Excel.' : 'Elige tu paleta de colores: solo la ves tú.'} />
       {error && <Aviso>{error}</Aviso>}
       <div className="ajustes">
         <section className="panel">
@@ -215,7 +217,7 @@ export function Configuracion() {
             )}
           </div>
         </section>
-        <ImportarEquipos />
+        {esAdmin && <ImportarEquipos />}
       </div>
     </>
   );

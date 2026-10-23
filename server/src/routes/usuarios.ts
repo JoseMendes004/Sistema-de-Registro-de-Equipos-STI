@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { pool } from '../db.ts';
 import { requireRole, usuarioDe } from '../middleware/auth.ts';
 import { HttpError } from '../middleware/error.ts';
-import { idParam, texto, validar } from '../middleware/validate.ts';
+import { idParam, texto, textoOpcional, validar } from '../middleware/validate.ts';
 import { claveSchema } from './auth.ts';
 
 export const usuariosRouter = Router();
@@ -14,7 +14,7 @@ usuariosRouter.get('/analistas', async (_req, res) => {
   const [analistas, estaciones] = await Promise.all([
     pool.query(`SELECT id, nombre || ' ' || apellido AS nombre FROM usuarios ORDER BY nombre, apellido`),
     pool.query(
-      `SELECT estacion FROM (SELECT estacion FROM equipos UNION SELECT estacion FROM usuarios) t ORDER BY estacion`,
+      `SELECT estacion FROM (SELECT estacion FROM equipos UNION SELECT estacion FROM usuarios) t WHERE estacion <> '' ORDER BY estacion`,
     ),
   ]);
   res.json({ analistas: analistas.rows, estaciones: estaciones.rows.map((r) => r.estacion) });
@@ -35,15 +35,24 @@ usuariosRouter.put('/:id', async (req, res) => {
   const id = idParam(req.params.id);
   const d = validar(
     z.object({
-      nombre: texto('El nombre', 60),
-      apellido: texto('El apellido', 60),
-      estacion: texto('La estación de trabajo', 60),
+      nombre: textoOpcional(60),
+      apellido: textoOpcional(60),
+      estacion: textoOpcional(60),
       rol: z.enum(['admin', 'analista']),
     }),
     req.body,
   );
   if (id === usuarioDe(res).id && d.rol !== 'admin') {
     throw new HttpError(400, 'No puedes quitarte tu propio rol de administrador.');
+  }
+  if (d.estacion) {
+    const repetida = await pool.query(
+      'SELECT 1 FROM usuarios WHERE lower(estacion) = lower($1) AND id <> $2 AND eliminado_en IS NULL',
+      [d.estacion, id],
+    );
+    if (repetida.rowCount) {
+      throw new HttpError(409, 'Revisa los campos marcados.', { estacion: 'Esa estación ya está asignada a otro usuario.' });
+    }
   }
   const { rows } = await pool.query(
     `UPDATE usuarios SET nombre = $1, apellido = $2, estacion = $3, rol = $4 WHERE id = $5 AND eliminado_en IS NULL

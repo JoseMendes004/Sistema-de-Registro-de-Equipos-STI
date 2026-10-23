@@ -22,7 +22,7 @@ const MENU = [
   { a: '/usuarios', texto: 'Usuarios', corto: 'Usuarios', icono: Users, admin: true },
   { a: '/actividades', texto: 'Actividades Técnicas', corto: 'Actividades', icono: Wrench, admin: true },
   { a: '/reportes', texto: 'Reportes', corto: 'Reportes', icono: FileBarChart },
-  { a: '/configuracion', texto: 'Configuración', corto: 'Ajustes', icono: Settings, admin: true },
+  { a: '/configuracion', texto: 'Configuración', corto: 'Ajustes', icono: Settings },
 ];
 
 export function Marca() {
@@ -78,13 +78,14 @@ export function Layout() {
           </button>
           <div className="superior-espacio" />
           <div className="superior-usuario">
-            <div className="avatar">{(usuario.nombre[0] + usuario.apellido[0]).toUpperCase()}</div>
+            <div className="avatar">{(((usuario.nombre[0] ?? '') + (usuario.apellido[0] ?? '')) || usuario.indicador[0] || '?').toUpperCase()}</div>
             <div className="superior-datos">
               <strong>
                 {usuario.nombre} {usuario.apellido}
               </strong>
               <span>
-                {usuario.rol === 'admin' ? 'Administrador' : 'Analista'} · Estación {usuario.estacion}
+                {usuario.rol === 'admin' ? 'Administrador' : 'Analista'}
+                {usuario.estacion && ` · Estación ${usuario.estacion}`}
               </span>
             </div>
             <button className="btn-salir" onClick={salir} title="Cerrar sesión" aria-label="Cerrar sesión">

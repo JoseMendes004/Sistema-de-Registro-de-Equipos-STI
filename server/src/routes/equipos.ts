@@ -22,21 +22,31 @@ export const equiposRouter = Router();
 
 const MAC_RE = /^[0-9A-Fa-f]{2}([-:.]?[0-9A-Fa-f]{2}){5}$/;
 
-const equipoSchema = z.object({
+// El nombre del equipo se genera: sistema operativo (D/O/L) + tipo (MOVILES/EPAREF) + últimos 6 dígitos de la MAC.
+const LETRA_SO = { WINDOWS_10: 'D', WINDOWS_11: 'O', LINUX: 'L' } as const;
+const NOMBRE_TIPO = { PORTATIL: 'MOVILES', ESCRITORIO: 'EPAREF' } as const;
+
+const equipoBase = z.object({
   usuario_propietario: texto('El usuario'),
   etiqueta: texto('La etiqueta', 60),
   modelo: texto('El modelo'),
   mac: texto('La dirección MAC', 20)
     .regex(MAC_RE, 'MAC inválida. Formato esperado: 00-34-7E-0F-E8-38.')
     .transform((v) => v.replace(/[^0-9A-Fa-f]/g, '').toUpperCase().match(/.{2}/g)!.join('-')),
-  nombre_equipo: texto('El nombre del equipo'),
+  tipo_equipo: z.enum(['PORTATIL', 'ESCRITORIO'], { error: 'Elige el tipo de equipo.' }),
+  sistema_operativo: z.enum(['WINDOWS_10', 'WINDOWS_11', 'LINUX'], { error: 'Elige el sistema operativo.' }),
   tipo_disco: z.enum(['HDD', 'SSD', 'OTRO', 'NO_ESPECIFICADO']).default('NO_ESPECIFICADO'),
   capacidad_disco: textoOpcional(30),
   ram: textoOpcional(30),
   observaciones: textoOpcional(2000),
 });
 
-const CAMPOS_EDITABLES = Object.keys(equipoSchema.shape) as (keyof z.infer<typeof equipoSchema>)[];
+const equipoSchema = equipoBase.transform((d) => ({
+  ...d,
+  nombre_equipo: `${LETRA_SO[d.sistema_operativo]}${NOMBRE_TIPO[d.tipo_equipo]}${d.mac.replace(/-/g, '').slice(-6)}`,
+}));
+
+const CAMPOS_EDITABLES = [...Object.keys(equipoBase.shape), 'nombre_equipo'] as (keyof z.infer<typeof equipoSchema>)[];
 
 const ETIQUETAS: Record<string, string> = {
   usuario_propietario: 'usuario',
@@ -44,21 +54,49 @@ const ETIQUETAS: Record<string, string> = {
   modelo: 'modelo',
   mac: 'MAC',
   nombre_equipo: 'nombre del equipo',
+  tipo_equipo: 'tipo de equipo',
+  sistema_operativo: 'sistema operativo',
   tipo_disco: 'tipo de disco',
   capacidad_disco: 'capacidad del disco',
   ram: 'memoria RAM',
   observaciones: 'observaciones',
 };
 
-/** Bloquea la fila del equipo. Cualquier analista puede trabajar sobre cualquier equipo. */
-async function bloquearEquipo(c: Cliente, id: number, u: Sesion, opciones: { permiteEntregado?: boolean } = {}) {
+/** La salida se permite con este mínimo de actividades completadas; el caso se cierra al 100 %. */
+const SALIDA_MINIMA = 12;
+
+/** Bloquea la fila del equipo. Cualquier analista puede trabajar sobre cualquier equipo abierto. */
+async function bloquearEquipo(c: Cliente, id: number, u: Sesion, opciones: { permiteCerrado?: boolean } = {}) {
   const { rows } = await c.query('SELECT * FROM equipos WHERE id = $1 FOR UPDATE', [id]);
   const equipo = rows[0];
   if (!equipo) throw new HttpError(404, 'Equipo no encontrado.');
-  if (equipo.estado === 'Entregado' && !opciones.permiteEntregado) {
-    throw new HttpError(409, 'El equipo ya fue entregado y no admite más cambios.');
+  if (equipo.cerrado_en && !opciones.permiteCerrado) {
+    throw new HttpError(409, 'El caso está cerrado y ya no admite cambios.');
   }
   return equipo;
+}
+
+/** Las primeras SALIDA_MINIMA actividades activas (por orden) que el equipo ya completó. */
+async function primerasHechas(c: Cliente, id: number) {
+  const { rows } = await c.query(
+    `SELECT count(*) FILTER (WHERE ea.completada)::int AS hechas, count(*)::int AS total
+       FROM (SELECT id FROM actividades WHERE activa ORDER BY orden, id LIMIT $2) a
+       LEFT JOIN equipo_actividades ea ON ea.actividad_id = a.id AND ea.equipo_id = $1`,
+    [id, SALIDA_MINIMA],
+  );
+  return { hechas: rows[0].hechas as number, total: rows[0].total as number };
+}
+
+/** Actividades completadas y total de actividades activas de un equipo. */
+async function avance(c: Cliente, id: number) {
+  const { rows } = await c.query(
+    `SELECT count(*) FILTER (WHERE ea.completada AND a.activa)::int AS hechas,
+            (SELECT count(*)::int FROM actividades WHERE activa) AS total
+       FROM equipo_actividades ea JOIN actividades a ON a.id = ea.actividad_id
+      WHERE ea.equipo_id = $1`,
+    [id],
+  );
+  return { hechas: rows[0]?.hechas ?? 0, total: rows[0]?.total ?? 0 };
 }
 
 equiposRouter.get('/', async (req, res) => {
@@ -73,10 +111,10 @@ equiposRouter.post('/', async (req, res) => {
   const id = await tx(async (c) => {
     const { rows } = await c.query(
       `INSERT INTO equipos (usuario_propietario, etiqueta, modelo, mac, nombre_equipo, analista_id, estacion,
-                            tipo_disco, capacidad_disco, ram, observaciones)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, numero_registro`,
+                            tipo_disco, capacidad_disco, ram, observaciones, tipo_equipo, sistema_operativo)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id, numero_registro`,
       [d.usuario_propietario, d.etiqueta, d.modelo, d.mac, d.nombre_equipo, u.id, u.estacion,
-       d.tipo_disco, d.capacidad_disco, d.ram, d.observaciones],
+       d.tipo_disco, d.capacidad_disco, d.ram, d.observaciones, d.tipo_equipo, d.sistema_operativo],
     );
     await registrarHistorial(c, rows[0].id, u.id, 'INGRESO', 'Equipo ingresado al laboratorio', {
       numero_registro: rows[0].numero_registro,
@@ -97,7 +135,7 @@ equiposRouter.get('/:id', async (req, res) => {
     obtenerHistorial(id),
     totalActividadesActivas(),
   ]);
-  const puedeOperar = equipo.estado !== 'Entregado';
+  const puedeOperar = !equipo.cerrado_en;
   res.json({
     equipo,
     actividades,
@@ -117,16 +155,17 @@ equiposRouter.put('/:id', async (req, res) => {
   const d = validar(equipoSchema, req.body);
   const u = usuarioDe(res);
   await tx(async (c) => {
-    const antes = await bloquearEquipo(c, id, u, { permiteEntregado: u.rol === 'admin' });
+    const antes = await bloquearEquipo(c, id, u, { permiteCerrado: u.rol === 'admin' });
     const cambios: Record<string, [unknown, unknown]> = {};
     for (const k of CAMPOS_EDITABLES) if (antes[k] !== d[k]) cambios[k] = [antes[k], d[k]];
     if (!Object.keys(cambios).length) return;
     await c.query(
       `UPDATE equipos SET usuario_propietario = $1, etiqueta = $2, modelo = $3, mac = $4, nombre_equipo = $5,
-              tipo_disco = $6, capacidad_disco = $7, ram = $8, observaciones = $9, actualizado_en = now()
-        WHERE id = $10`,
+              tipo_disco = $6, capacidad_disco = $7, ram = $8, observaciones = $9,
+              tipo_equipo = $10, sistema_operativo = $11, actualizado_en = now()
+        WHERE id = $12`,
       [d.usuario_propietario, d.etiqueta, d.modelo, d.mac, d.nombre_equipo, d.tipo_disco, d.capacidad_disco,
-       d.ram, d.observaciones, id],
+       d.ram, d.observaciones, d.tipo_equipo, d.sistema_operativo, id],
     );
     const nombres = Object.keys(cambios).map((k) => ETIQUETAS[k]).join(', ');
     await registrarHistorial(c, id, u.id, 'EDICION', `Datos editados: ${nombres}`, cambios);
@@ -171,7 +210,7 @@ equiposRouter.put('/:id/estado', async (req, res) => {
   const id = idParam(req.params.id);
   const d = validar(z.object({ estado: z.enum(ESTADOS) }), req.body);
   if (d.estado === 'Entregado') {
-    throw new HttpError(400, 'Para marcar un equipo como entregado usa «Registrar salida».');
+    throw new HttpError(400, 'Para cerrar el caso usa «Cerrar caso» (requiere la salida y el 100 % de las actividades).');
   }
   const u = usuarioDe(res);
   await tx(async (c) => {
@@ -200,6 +239,17 @@ equiposRouter.post('/:id/salida', async (req, res) => {
   const u = usuarioDe(res);
   await tx(async (c) => {
     const antes = await bloquearEquipo(c, id, u);
+    const { hechas, total } = await avance(c, id);
+    const primeras = await primerasHechas(c, id);
+    if (primeras.hechas < primeras.total) {
+      throw new HttpError(
+        409,
+        `Para registrar la salida deben estar completas las primeras ${primeras.total} actividades (llevas ${primeras.hechas}).`,
+      );
+    }
+    const ya = await c.query('SELECT 1 FROM salidas WHERE equipo_id = $1', [id]);
+    if (ya.rowCount) throw new HttpError(409, 'La salida de este equipo ya fue registrada.');
+
     const campos: Record<string, string> = {};
     if (d.fecha_salida < antes.fecha_ingreso) campos.fecha_salida = 'La salida no puede ser anterior al ingreso.';
     else if (d.fecha_salida.getTime() > Date.now() + 5 * 60 * 1000) campos.fecha_salida = 'La salida no puede estar en el futuro.';
@@ -210,15 +260,37 @@ equiposRouter.post('/:id/salida', async (req, res) => {
        VALUES ($1, $2, $3, $4, $5)`,
       [id, d.fecha_salida, d.retirado_por, d.observaciones, u.id],
     );
-    await c.query(`UPDATE equipos SET estado = 'Entregado', actualizado_en = now() WHERE id = $1`, [id]);
-    await registrarCambioEstado(c, id, u.id, antes.estado, 'Entregado');
-    await registrarHistorial(c, id, u.id, 'SALIDA', `Equipo entregado a ${d.retirado_por}`, {
+    await c.query('UPDATE equipos SET actualizado_en = now() WHERE id = $1', [id]);
+    // La salida no cierra el caso: el equipo sigue editable hasta completar el 100 % de las actividades.
+    await registrarHistorial(c, id, u.id, 'SALIDA', `Salida registrada: retira ${d.retirado_por}. Caso abierto hasta completar el 100 %.`, {
       fecha_salida: d.fecha_salida,
       retirado_por: d.retirado_por,
-      estado_anterior: antes.estado,
+      actividades: `${hechas}/${total}`,
     });
   });
   res.status(201).json({ equipo: await obtenerEquipo(id), historial: await obtenerHistorial(id) });
+});
+
+// Cierra el caso: exige la salida registrada y el 100 % de las actividades.
+// El equipo sale del registro de equipos y pasa a Reportes.
+equiposRouter.post('/:id/cerrar', async (req, res) => {
+  const id = idParam(req.params.id);
+  const u = usuarioDe(res);
+  await tx(async (c) => {
+    const antes = await bloquearEquipo(c, id, u);
+    const salida = await c.query('SELECT 1 FROM salidas WHERE equipo_id = $1', [id]);
+    if (!salida.rowCount) throw new HttpError(409, 'Primero registra la salida del equipo.');
+    const { hechas, total } = await avance(c, id);
+    if (hechas < total) {
+      throw new HttpError(409, `Para cerrar el caso se necesita el 100 % de las actividades (llevas ${hechas} de ${total}).`);
+    }
+    await c.query(`UPDATE equipos SET cerrado_en = now(), estado = 'Entregado', actualizado_en = now() WHERE id = $1`, [id]);
+    await registrarCambioEstado(c, id, u.id, antes.estado, 'Entregado');
+    await registrarHistorial(c, id, u.id, 'ESTADO', 'Caso cerrado: el equipo sale del registro y pasa a Reportes.', {
+      estado_anterior: antes.estado,
+    });
+  });
+  res.json({ equipo: await obtenerEquipo(id), historial: await obtenerHistorial(id) });
 });
 
 equiposRouter.delete('/:id', requireRole('admin'), async (req, res) => {

@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { createReadStream, existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { herramienta, urlConexion } from './pg.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const envPath = path.join(root, '.env');
@@ -15,14 +16,10 @@ if (!archivo || !existsSync(archivo)) {
   process.exit(1);
 }
 
-const user = process.env.POSTGRES_USER ?? 'sti';
-const db = process.env.POSTGRES_DB ?? 'sti';
-
-const proc = spawn(
-  'docker',
-  ['compose', 'exec', '-T', 'db', 'psql', '-U', user, '-d', db, '-v', 'ON_ERROR_STOP=1', '-q'],
-  { cwd: root, stdio: ['pipe', 'inherit', 'inherit'] },
-);
+const proc = spawn(herramienta('psql'), [urlConexion(), '-v', 'ON_ERROR_STOP=1', '-q'], {
+  cwd: root,
+  stdio: ['pipe', 'inherit', 'inherit'],
+});
 createReadStream(archivo).pipe(proc.stdin);
 proc.on('close', (code) => {
   if (code !== 0) {

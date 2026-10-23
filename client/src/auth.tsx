@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import type { ReactNode } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { alExpirarSesion, api } from './api';
+import { cargarTemaServidor } from './tema';
 import type { Usuario } from './types';
 
 interface Auth {
@@ -24,6 +25,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(() => setUsuario(null))
       .finally(() => setCargando(false));
   }, []);
+
+  // La paleta es de cada usuario: se carga al tener sesión y al volver a esta pestaña.
+  const idUsuario = usuario?.id;
+  useEffect(() => {
+    if (!idUsuario) return;
+    cargarTemaServidor();
+    window.addEventListener('focus', cargarTemaServidor);
+    return () => window.removeEventListener('focus', cargarTemaServidor);
+  }, [idUsuario]);
 
   const entrar = useCallback(async (indicador: string, clave: string) => {
     const r = await api<{ usuario: Usuario }>('/auth/login', { method: 'POST', body: { indicador, clave } });

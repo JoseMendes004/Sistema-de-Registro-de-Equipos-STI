@@ -64,6 +64,8 @@ export const filtrosSchema = z.object({
   estacion: z.string().trim().max(60).optional(),
   analista_id: z.coerce.number().int().positive().optional(),
   modelo: z.string().trim().max(100).optional(),
+  // si: solo casos cerrados (Reportes); no: solo casos abiertos (Registro de equipos).
+  cerrado: z.enum(['si', 'no']).optional(),
   orden: z.enum(['fecha_desc', 'fecha_asc']).default('fecha_desc'),
   pagina: z.coerce.number().int().min(1).default(1),
   por_pagina: z.coerce.number().int().min(1).max(1000).default(10),
@@ -76,7 +78,7 @@ const SELECT_EQUIPO = `
   SELECT e.id, e.numero_registro, e.fecha_ingreso, e.usuario_propietario, e.etiqueta, e.modelo, e.mac,
          e.nombre_equipo, e.analista_id, u.nombre || ' ' || u.apellido AS analista,
          u.indicador AS analista_indicador, e.estacion, e.tipo_disco, e.capacidad_disco, e.ram,
-         e.estado, e.observaciones,
+         e.estado, e.observaciones, e.cerrado_en, e.tipo_equipo, e.sistema_operativo,
          s.fecha_salida, s.retirado_por, s.observaciones AS salida_observaciones,
          su.nombre || ' ' || su.apellido AS entregado_por,
          (SELECT count(*)::int FROM equipo_actividades ea
@@ -116,6 +118,8 @@ function construirWhere(f: Filtros) {
     }
     where.push(`(${partes.join(' OR ')})`);
   }
+  if (f.cerrado === 'si') where.push('e.cerrado_en IS NOT NULL');
+  if (f.cerrado === 'no') where.push('e.cerrado_en IS NULL');
   if (f.estado) where.push(`e.estado = ${p(f.estado)}`);
   if (f.desde) where.push(`e.fecha_ingreso >= ${p(f.desde)}::date`);
   if (f.hasta) where.push(`e.fecha_ingreso < ${p(f.hasta)}::date + 1`);

@@ -26,8 +26,8 @@ export function App() {
           <Route path="/equipos/:id" element={<EquipoDetalle />} />
           <Route path="/equipos/:id/editar" element={<EquipoEditar />} />
           <Route path="/reportes" element={<Reportes />} />
+          <Route path="/configuracion" element={<Configuracion />} />
           <Route element={<RutaProtegida soloAdmin />}>
-            <Route path="/configuracion" element={<Configuracion />} />
             <Route path="/usuarios" element={<Usuarios />} />
             <Route path="/actividades" element={<Actividades />} />
           </Route>

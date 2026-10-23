@@ -91,6 +91,7 @@ await tx(async (c) => {
          VALUES ($1, $2, $3, $4, $5)`,
         [id, f, prop, 'Equipo entregado conforme.', analista],
       );
+      await c.query('UPDATE equipos SET cerrado_en = $2 WHERE id = $1', [id, f]);
       await registrarCambioEstado(c, id, analista, 'Listo para entregar', 'Entregado', f);
       await registrarHistorial(c, id, analista, 'SALIDA', `Equipo entregado a ${prop}`, {}, f);
     }

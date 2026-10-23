@@ -7,7 +7,7 @@ import { useUsuario } from '../auth';
 import { Aviso, Cabecera, Campo, Confirmar, Insignia, Modal, Progreso } from '../components';
 import { ESTADOS } from '../types';
 import type { ActividadEquipo, DetalleEquipo, Equipo, Estado, Evento } from '../types';
-import { ahoraLocal, DISCOS, fechaHora, numeroRegistro } from '../util';
+import { ahoraLocal, DISCOS, fechaHora, nombreSistema, nombreTipo, numeroRegistro } from '../util';
 
 function Dato({ etiqueta, children }: { etiqueta: string; children: ReactNode }) {
   return (
@@ -64,7 +64,7 @@ function ModalSalida({
 
   return (
     <Modal
-      titulo={confirmando ? 'Confirmar entrega' : `Registrar salida — ${numeroRegistro(equipo.numero_registro)}`}
+      titulo={confirmando ? 'Confirmar salida' : `Registrar salida — ${numeroRegistro(equipo.numero_registro)}`}
       onCerrar={onCerrar}
       pie={
         confirmando ? (
@@ -74,7 +74,7 @@ function ModalSalida({
             </button>
             {/* key distinta: evita que un doble clic en «Continuar» confirme la entrega */}
             <button key="confirmar" className="btn primario" onClick={confirmar} disabled={ocupado}>
-              {ocupado ? 'Registrando…' : 'Sí, registrar entrega'}
+              {ocupado ? 'Registrando…' : 'Sí, registrar salida'}
             </button>
           </>
         ) : (
@@ -92,8 +92,8 @@ function ModalSalida({
       {confirmando ? (
         <div className="confirmar-mensaje">
           <p>
-            Vas a registrar la salida del equipo <strong>{equipo.modelo}</strong> (etiqueta {equipo.etiqueta}). El estado
-            pasará a <strong>Entregado</strong> y el registro quedará cerrado.
+            Vas a registrar la salida del equipo <strong>{equipo.modelo}</strong> (etiqueta {equipo.etiqueta}). El caso{' '}
+            <strong>seguirá abierto y editable</strong> hasta completar el 100 % de las actividades; entonces podrás cerrarlo.
           </p>
           <dl className="datos compactos">
             <Dato etiqueta="Fecha y hora de salida">{fechaHora(new Date(fecha).toISOString())}</Dato>
@@ -139,6 +139,7 @@ export function EquipoDetalle() {
   const [estadoSel, setEstadoSel] = useState<Estado>('Recibido');
   const [guardando, setGuardando] = useState<number | 'estado' | null>(null);
   const [salida, setSalida] = useState(false);
+  const [cerrando, setCerrando] = useState(false);
 
   const cargar = useCallback(() => {
     api<DetalleEquipo>(`/equipos/${id}`)
@@ -174,6 +175,27 @@ export function EquipoDetalle() {
 
   const e = d.equipo;
   const hechas = d.actividades.filter((a) => a.completada && a.activa).length;
+  // La salida se permite desde la actividad 12; el caso se cierra al 100 %.
+  const SALIDA_MINIMA = 12;
+  const primeras = d.actividades.filter((a) => a.activa).sort((a, b) => a.orden - b.orden).slice(0, SALIDA_MINIMA);
+  const primerasHechas = primeras.filter((a) => a.completada).length;
+  const puedeSalida = d.puede_operar && !e.fecha_salida && primerasHechas === primeras.length;
+  const completo = d.total_actividades > 0 && hechas >= d.total_actividades;
+
+  async function cerrarCaso() {
+    setCerrando(true);
+    setAviso('');
+    try {
+      const r = await api<Pick<DetalleEquipo, 'equipo' | 'historial'>>(`/equipos/${e.id}/cerrar`, { method: 'POST' });
+      setD((x) => x && { ...x, ...r, puede_operar: false });
+      setError('');
+      setAviso('Caso cerrado. El equipo salió del registro y ya aparece en Reportes.');
+    } catch (err) {
+      setError(mensajeError(err));
+    } finally {
+      setCerrando(false);
+    }
+  }
 
   async function marcar(a: ActividadEquipo) {
     setGuardando(a.id);
@@ -241,11 +263,6 @@ export function EquipoDetalle() {
                 <Pencil size={16} /> Editar
               </Link>
             )}
-            {d.puede_operar && (
-              <button className="btn primario" onClick={() => setSalida(true)}>
-                <LogOut size={16} /> Registrar salida
-              </button>
-            )}
             {usuario.rol === 'admin' && (
               <button className="btn peligro" onClick={() => setEliminar(true)}>
                 <Trash2 size={16} /> Eliminar
@@ -293,6 +310,8 @@ export function EquipoDetalle() {
               <Dato etiqueta="Dirección MAC">
                 <span className="mono">{e.mac}</span>
               </Dato>
+              <Dato etiqueta="Tipo de equipo">{nombreTipo(e.tipo_equipo)}</Dato>
+              <Dato etiqueta="Sistema operativo">{nombreSistema(e.sistema_operativo)}</Dato>
               <Dato etiqueta="Nombre del equipo">
                 <span className="mono">{e.nombre_equipo}</span>
               </Dato>
@@ -309,6 +328,43 @@ export function EquipoDetalle() {
             </dl>
             <h3>Observaciones</h3>
             <p className="texto-libre">{e.observaciones || 'Sin observaciones.'}</p>
+          </section>
+
+          <section className="panel panel-salida-caso">
+            <div className="panel-cabecera">
+              <h2>Salida del equipo</h2>
+              <span className="nota">
+                Actividades: {hechas}/{d.total_actividades}
+              </span>
+            </div>
+            {e.cerrado_en ? (
+              <Aviso tipo="ok">Caso cerrado ({fechaHora(e.cerrado_en)}). El equipo ya no está en el registro y aparece en Reportes.</Aviso>
+            ) : e.fecha_salida ? (
+              <Aviso tipo="ok">
+                Salida registrada ({fechaHora(e.fecha_salida)}). El equipo sigue editable hasta completar el 100 % de las actividades; después podrás cerrar el caso.
+              </Aviso>
+            ) : primerasHechas < primeras.length ? (
+              <Aviso tipo="info">
+                La salida se puede registrar al completar las primeras {primeras.length} actividades (llevas {primerasHechas}).
+              </Aviso>
+            ) : null}
+            {!e.cerrado_en && (
+              <div className="acciones-salida">
+                <button className="btn primario" onClick={() => setSalida(true)} disabled={!puedeSalida}>
+                  <LogOut size={16} /> {e.fecha_salida ? 'Salida registrada' : 'Registrar salida'}
+                </button>
+                {e.fecha_salida && (
+                  <button className="btn" onClick={cerrarCaso} disabled={!completo || cerrando}>
+                    {cerrando ? 'Cerrando…' : 'Cerrar caso'}
+                  </button>
+                )}
+              </div>
+            )}
+            {e.fecha_salida && !e.cerrado_en && !completo && (
+              <p className="nota">
+                Para cerrar el caso faltan {d.total_actividades - hechas} actividad(es): llega al 100 %.
+              </p>
+            )}
           </section>
 
           {e.fecha_salida && (
@@ -386,8 +442,8 @@ export function EquipoDetalle() {
           onCerrar={() => setSalida(false)}
           onListo={(r) => {
             setSalida(false);
-            setAviso('Salida registrada. El equipo quedó como «Entregado».');
-            setD((x) => x && { ...x, ...r, puede_operar: false });
+            setAviso('Salida registrada. El equipo sigue editable hasta completar el 100 % de las actividades.');
+            setD((x) => x && { ...x, ...r });
             cargar();
           }}
         />

@@ -42,7 +42,7 @@ export function Reportes() {
   useEffect(() => {
     let vigente = true;
     const t = setTimeout(() => {
-      api<ListaEquipos>(`/equipos${qs({ ...f, por_pagina: 1000 })}`)
+      api<ListaEquipos>(`/equipos${qs({ ...f, cerrado: 'si', por_pagina: 1000 })}`)
         .then((r) => {
           if (!vigente) return;
           setLista(r);
@@ -73,7 +73,7 @@ export function Reportes() {
   }
 
   // El Excel incluye todos los registros que cumplen los filtros (hasta 10 000).
-  const exportar = `/api/reportes/export${qs({ ...f, formato: 'xlsx' })}`;
+  const exportar = `/api/reportes/export${qs({ ...f, cerrado: 'si', formato: 'xlsx' })}`;
   const fecha = (k: keyof typeof VACIO, etiqueta: string) => (
     <label className="campo">
       <span className="campo-etiqueta">{etiqueta}</span>
@@ -86,7 +86,7 @@ export function Reportes() {
       <Cabecera
         icono={<FileBarChart size={24} />}
         titulo="Reportes"
-        subtitulo="Filtra los registros y expórtalos a Excel."
+        subtitulo="Casos cerrados: equipos con salida registrada y el 100 % de las actividades. Filtra y expórtalos a Excel."
         acciones={
           <a className="btn primario" href={exportar} download>
             <FileSpreadsheet size={16} /> Excel
@@ -157,6 +157,7 @@ export function Reportes() {
                   <th>Usuario</th>
                   <th>Etiqueta</th>
                   <th>Modelo</th>
+                  <th>Nombre del equipo</th>
                   <th>Analista</th>
                   <th>Est.</th>
                   <th>Activ.</th>
@@ -179,6 +180,9 @@ export function Reportes() {
                     <td data-label="Usuario">{e.usuario_propietario}</td>
                     <td data-label="Etiqueta">{e.etiqueta}</td>
                     <td data-label="Modelo">{e.modelo}</td>
+                    <td data-label="Nombre del equipo" className="mono">
+                      {e.nombre_equipo}
+                    </td>
                     <td data-label="Analista">{e.analista}</td>
                     <td data-label="Estación">{e.estacion}</td>
                     <td data-label="Actividades">
